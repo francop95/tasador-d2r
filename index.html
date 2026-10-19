@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tasador D2R</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<style>
+/* Layout: una columna de "tablillas" de piedra; filtros arriba, resumen, runas + demanda,
+   tabla de valores con detalle al costado, oportunidades e historial. */
+:root {
+  --bg: #f4f3f0;
+  --surface: #fcfcfb;
+  --surface-2: #efeee9;
+  --ink: #17140f;
+  --ink-2: #55524b;
+  --muted: #8a867d;
+  --grid: #e3e1da;
+  --axis: #c6c3b8;
+  --border: rgba(23, 20, 15, 0.12);
+  --accent: #a3561a;          /* ámbar de runa */
+  --accent-soft: rgba(163, 86, 26, 0.10);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #6250d6;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --warn: #b77b00;
+  --bad: #d03b3b;
+  --font-display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0e0c; --surface: #1a1917; --surface-2: #24221f; --ink: #f0efec; --ink-2: #c3c2b7;
+    --muted: #8f8b82; --grid: #2c2b28; --axis: #3a3935; --border: rgba(255, 255, 255, 0.10);
+    --accent: #e0954f; --accent-soft: rgba(224, 149, 79, 0.12);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #9085e9;
+    --good: #0ca30c; --good-ink: #2fbf2f; --warn: #e2a42a; --bad: #e66767;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0e0c; --surface: #1a1917; --surface-2: #24221f; --ink: #f0efec; --ink-2: #c3c2b7;
+  --muted: #8f8b82; --grid: #2c2b28; --axis: #3a3935; --border: rgba(255, 255, 255, 0.10);
+  --accent: #e0954f; --accent-soft: rgba(224, 149, 79, 0.12);
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #9085e9;
+  --good: #0ca30c; --good-ink: #2fbf2f; --warn: #e2a42a; --bad: #e66767;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 20px; }
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+h1 { font: 700 clamp(26px, 4vw, 36px)/1.1 var(--font-display); letter-spacing: 0.04em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.sub { color: var(--ink-2); margin: 4px 0 0; }
+h2 { font: 600 15px/1.3 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase; margin: 0; }
+.hint { color: var(--muted); font-size: 12.5px; margin: 2px 0 0; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.filters label { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; min-width: 0; max-width: 100%; }
+.filters label select { flex: 1 1 auto; width: 100%; text-overflow: ellipsis; }
+select, input[type="search"] { font: inherit; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; min-width: 0; max-width: 100%; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.seg button { font: inherit; border: 0; background: var(--surface-2); color: var(--ink-2); padding: 6px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.btn { font: inherit; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+  border-radius: 7px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.spacer { flex: 1; }
+.meta { color: var(--muted); font-size: 12.5px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
+.tile .label { color: var(--ink-2); font-size: 12.5px; }
+.tile .value { font-size: 28px; font-weight: 650; margin-top: 4px; }
+.tile .value small { font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.tile .foot { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.tile.hero { background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--surface); }
+.tile.hero .value { font-size: 34px; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; justify-content: space-between; }
+.cols { display: grid; gap: 20px; align-items: start; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.cols.detail { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .cols, .cols.detail { grid-template-columns: minmax(0, 1fr); } }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--ink-2); font-size: 12.5px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.legend i.ring { background: transparent; border: 2px solid var(--series-2); }
+.legend i.line { width: 14px; height: 2px; border-radius: 1px; vertical-align: 3px; }
+
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--ink-2); font: 12px var(--font-ui); font-variant-numeric: tabular-nums; }
+svg .muted { fill: var(--muted); }
+svg .strong { fill: var(--ink); font-weight: 600; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.axisline { stroke: var(--axis); stroke-width: 1; }
+.hit { fill: transparent; cursor: pointer; }
+.row-hover { fill: var(--accent-soft); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; max-height: 520px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface-2); color: var(--ink-2); font-weight: 600; font-size: 12px; cursor: pointer; user-select: none; z-index: 1; }
+th[aria-sort="ascending"]::after { content: " ▲"; font-size: 9px; }
+th[aria-sort="descending"]::after { content: " ▼"; font-size: 9px; }
+td.num, th.num { text-align: right; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--accent-soft); }
+tbody tr.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+td.wrap { white-space: normal; min-width: 180px; }
+a { color: var(--accent); }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-2); }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.pill.alta::before { background: var(--good); }
+.pill.media::before { background: var(--warn); }
+.pill.baja::before { background: var(--bad); }
+.pill.referencia::before { background: var(--accent); }
+.chip { font-size: 11.5px; padding: 1px 7px; border-radius: 5px; background: var(--surface-2); color: var(--ink-2); }
+.delta-neg { color: var(--good-ink); font-weight: 600; }
+.delta-pos { color: var(--bad); font-weight: 600; }
+
+.detail-title { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.detail-title h3 { font: 700 22px/1.2 var(--font-display); margin: 0; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.kv div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.kv b { display: block; font-size: 17px; }
+.kv span { color: var(--muted); font-size: 12px; }
+.asks { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.asks li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.asks .bar { height: 6px; border-radius: 3px; background: var(--series-1); margin-top: 3px; }
+.asks .txt { min-width: 0; overflow-wrap: anywhere; }
+.empty { color: var(--muted); padding: 18px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; }
+
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  max-width: 320px; display: none; }
+#tip b { font-size: 14px; display: block; }
+#tip .k { color: var(--muted); }
+#drop { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; background: rgba(0,0,0,.45);
+  color: #fff; font: 600 20px var(--font-display); letter-spacing: .06em; }
+@media (prefers-reduced-motion: no-preference) { tbody tr, .btn { transition: background .12s, border-color .12s; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Tasador <span>D2R</span></h1>
+      <p class="sub">Valores de mercado de Traderie expresados en runas.</p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="filters" role="group" aria-label="Filtros">
+    <label for="f-seg">Reino <select id="f-seg"></select></label>
+    <label>Unidad
+      <span class="seg" id="f-unidad">
+        <button type="button" data-u="ref" aria-pressed="true">Ist</button>
+        <button type="button" data-u="Ber" aria-pressed="false">Ber</button>
+      </span>
+    </label>
+    <span class="spacer"></span>
+    <button class="btn" type="button" id="btn-cargar">Cargar dashboard.json</button>
+    <input type="file" id="f-archivo" accept=".json,application/json" hidden>
+  </div>
+
+  <section class="tiles" id="tiles" aria-label="Resumen"></section>
+
+  <div class="cols">
+    <section class="panel" aria-labelledby="h-runas">
+      <div class="panel-head">
+        <div><h2 id="h-runas">Escalera de runas</h2><p class="hint">Escala logarítmica: cada línea vertical multiplica por 10.</p></div>
+        <div class="legend"><span><i style="background:var(--series-1)"></i>Valor estimado</span><span><i class="ring"></i>Valor de Traderie</span></div>
+      </div>
+      <div id="chart-runas"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-demanda">
+      <div class="panel-head">
+        <div><h2 id="h-demanda">Lo más buscado</h2><p class="hint">Veces que se busca un item o se lo pide como pago.</p></div>
+      </div>
+      <div id="chart-demanda"></div>
+    </section>
+  </div>
+
+  <div class="cols detail">
+    <section class="panel" aria-labelledby="h-valores">
+      <div class="panel-head">
+        <div><h2 id="h-valores">Tabla de valores</h2><p class="hint">Tocá una fila para ver el detalle del item.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="search" id="f-buscar" placeholder="Buscar item…" aria-label="Buscar item">
+          <select id="f-tipo" aria-label="Tipo de item"></select>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="t-valores"></table></div>
+    </section>
+    <section class="panel" aria-labelledby="h-detalle" id="detalle"></section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-op">
+    <div class="panel-head">
+      <div><h2 id="h-op">Oportunidades</h2><p class="hint">Ventas muy por debajo del valor estimado y compras que pagan de más. Solo items con confianza media o alta.</p></div>
+    </div>
+    <div class="table-wrap"><table id="t-op"></table></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-hist">
+    <div class="panel-head">
+      <div><h2 id="h-hist">Evolución</h2><p class="hint">Valor estimado en cada corrida del script.</p></div>
+      <div class="legend" id="leg-hist"></div>
+    </div>
+    <div id="chart-hist"></div>
+  </section>
+</div>
+<div id="tip" role="status"></div>
+<div id="drop">Soltá el dashboard.json</div>
+
+<script id="datos" type="application/json">/*__DATOS__*/null</script>
+<script>
+(() => {
+"use strict";
+const SEG = ["version", "ladder", "modo", "plataforma"];
+const NS = "http://www.w3.org/2000/svg";
+const HIST_ITEMS = ["Ber", "Jah", "Lo", "Ohm"];
+const COLOR_LADO = { venta: "var(--series-1)", compra: "var(--series-2)", vendido: "var(--series-3)", comprado: "var(--series-4)" };
+const VERBO_LADO = { venta: "Vende", compra: "Busca", vendido: "Vendió", comprado: "Compró" };
+const $ = (s) => document.querySelector(s);
+
+let D = null;
+const st = { seg: null, unidad: "ref", item: null, buscar: "", tipo: "", orden: { col: "valor", dir: -1 } };
+try { const g = JSON.parse(localStorage.getItem("tasador-prefs") || "{}"); if (g.unidad) st.unidad = g.unidad; } catch (e) {}
+
+// ------------------------------------------------------------------ utilidades
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : String(k));
+  return e;
+}
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const segKey = (r) => SEG.map((k) => r[k] ?? "?").join(" · ");
+const enSeg = (rows) => (rows || []).filter((r) => segKey(r) === st.seg);
+const num = (v) => (v == null || Number.isNaN(+v) ? null : +v);
+function fmt(v) {
+  v = num(v); if (v == null) return "–";
+  const a = Math.abs(v);
+  if (a >= 1000) return v.toLocaleString("es-AR", { maximumFractionDigits: 0 });
+  if (a >= 100) return v.toFixed(0);
+  if (a >= 10) return v.toFixed(1);
+  if (a >= 1) return v.toFixed(2);
+  if (a === 0) return "0";
+  return v.toPrecision(2);
+}
+function unidadNombre() { return st.unidad === "Ber" ? "Ber" : (D && D.unidad) || "Ist"; }
+function berDelSeg() { const b = enSeg(D.valores_items).find((r) => r.item === "Ber"); return b ? num(b.valor) : null; }
+function conv(v) { v = num(v); if (v == null) return null; if (st.unidad !== "Ber") return v; const b = berDelSeg(); return b ? v / b : null; }
+const fmtU = (v) => { const c = conv(v); return c == null ? "–" : `${fmt(c)} ${unidadNombre()}`; };
+function fecha(s) { if (!s) return "–"; const d = new Date(s); return isNaN(d) ? s : d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); }
+function pill(c) { return el("span", { class: `pill ${c || ""}` }, c || "–"); }
+function guardarPrefs() { try { localStorage.setItem("tasador-prefs", JSON.stringify({ unidad: st.unidad, seg: st.seg })); } catch (e) {} }
+
+const tip = $("#tip");
+function mostrarTip(ev, filas) {
+  tip.replaceChildren(...filas);
+  tip.style.display = "block";
+  const r = tip.getBoundingClientRect();
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
+  tip.style.left = `${Math.max(8, x)}px`; tip.style.top = `${Math.max(8, y)}px`;
+}
+const ocultarTip = () => { tip.style.display = "none"; };
+function tipFocus(target, filas) {
+  const r = target.getBoundingClientRect();
+  mostrarTip({ clientX: r.right, clientY: r.top }, filas);
+}
+
+// escala log con ticks en potencias de 10
+function escalaLog(min, max, x0, x1) {
+  const lo = Math.floor(Math.log10(min)), hi = Math.ceil(Math.log10(max));
+  const f = (v) => x0 + ((Math.log10(v) - lo) / Math.max(hi - lo, 1)) * (x1 - x0);
+  const ticks = []; for (let p = lo; p <= hi; p++) ticks.push(10 ** p);
+  return { f, ticks };
+}
+const tickTxt = (v) => (v >= 1 ? v.toLocaleString("es-AR") : String(+v.toPrecision(1)));
+
+// ------------------------------------------------------------------ carga
+function cargar(datos, conservar = false) {
+  const previo = { seg: st.seg, item: st.item };
+  D = datos;
+  const segs = (D.segmentos || []).slice().sort((a, b) => (b.analizado - a.analizado) || (b.listings - a.listings));
+  const sel = $("#f-seg"); sel.replaceChildren();
+  for (const s of segs) sel.append(el("option", { value: segKey(s) }, `${segKey(s)} (${s.listings})`));
+  let pref = null; try { pref = JSON.parse(localStorage.getItem("tasador-prefs") || "{}").seg; } catch (e) {}
+  if (conservar && segs.some((s) => segKey(s) === previo.seg)) pref = previo.seg;
+  st.seg = segs.some((s) => segKey(s) === pref) ? pref : (segs[0] ? segKey(segs[0]) : null);
+  sel.value = st.seg || "";
+  st.item = conservar ? previo.item : null;
+  render();
+}
+
+function render() {
+  if (!D || !st.seg) { $("#tiles").replaceChildren(el("div", { class: "empty" }, "No hay datos. Corré traderie_runas.py o cargá un dashboard.json.")); return; }
+  $("#meta").textContent = `Datos del ${fecha(D.generado)} · unidad base ${D.unidad}${remoto ? " · se actualiza sola" : ""}`;
+  document.querySelectorAll("#f-unidad button").forEach((b) => {
+    b.textContent = b.dataset.u === "ref" ? D.unidad : "Ber";
+    b.setAttribute("aria-pressed", String(b.dataset.u === st.unidad));
+  });
+  const filas = filasValores();
+  if (!st.item || !filas.some((f) => f.item === st.item)) st.item = (filas.find((f) => f.item === "Ber") || filas[0] || {}).item || null;
+  renderTiles(); renderRunas(); renderDemanda(); renderTipos(filas); renderTabla(filas); renderDetalle(); renderOportunidades(); renderHistorial();
+}
+
+// ------------------------------------------------------------------ resumen
+function renderTiles() {
+  const s = (D.segmentos || []).find((x) => segKey(x) === st.seg) || {};
+  const v = enSeg(D.valores_items);
+  const ber = v.find((r) => r.item === "Ber"), jah = v.find((r) => r.item === "Jah");
+  const op = enSeg(D.oportunidades);
+  const conf = v.filter((r) => r.confianza === "alta" || r.confianza === "media").length;
+  const tile = (cls, label, value, foot) => el("div", { class: `tile ${cls}` }, el("div", { class: "label" }, label), el("div", { class: "value" }, ...value), el("div", { class: "foot" }, foot));
+  $("#tiles").replaceChildren(
+    tile("hero", "1 Ber equivale a", [ber ? fmt(ber.valor) : "–", el("small", {}, ` ${D.unidad}`)], ber ? `confianza ${ber.confianza} · ${ber.n_ecuaciones} trueques` : "sin datos de Ber"),
+    tile("", "1 Jah equivale a", [jah ? fmt(conv(jah.valor)) : "–", el("small", {}, ` ${unidadNombre()}`)], jah ? `confianza ${jah.confianza}` : "sin datos de Jah"),
+    tile("", "Listings analizados", [String(s.listings ?? 0)], `${s.venta ?? 0} venta · ${s.compra ?? 0} compra · ${s.completados ?? 0} cerrados`),
+    tile("", "Items con valor", [String(v.length)], `${conf} con confianza media o alta`),
+    tile("", "Oportunidades", [String(op.length)], "desvío de 30% o más"),
+  );
+}
+
+// ------------------------------------------------------------------ escalera de runas
+function renderRunas() {
+  const box = $("#chart-runas");
+  const rows = enSeg(D.valores_items).filter((r) => r.es_runa).sort((a, b) => b.orden_runa - a.orden_runa);
+  if (!rows.length) { box.replaceChildren(el("div", { class: "empty" }, "Todavía no hay runas valuadas en este reino.")); return; }
+  const W = Math.max(box.clientWidth, 300), rowH = 26, top = 8, bottom = 28, left = 52, right = 64;
+  const H = top + rows.length * rowH + bottom;
+  const vals = rows.flatMap((r) => [conv(r.valor), conv(r.valor_traderie)]).filter((x) => x > 0);
+  const { f, ticks } = escalaLog(Math.min(...vals), Math.max(...vals), left, W - right);
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Valor de cada runa en escala logarítmica" });
+  for (const t of ticks) {
+    svg.append(sv("line", { x1: f(t), x2: f(t), y1: top, y2: H - bottom, class: "gridline" }));
+    svg.append(sv("text", { x: f(t), y: H - bottom + 17, "text-anchor": "middle", class: "muted" }, tickTxt(t)));
+  }
+  svg.append(sv("line", { x1: left, x2: W - right, y1: H - bottom, y2: H - bottom, class: "axisline" }));
+  rows.forEach((r, i) => {
+    const y = top + i * rowH + rowH / 2, v = conv(r.valor), tv = conv(r.valor_traderie);
+    const g = sv("g", { tabindex: 0, role: "button", "aria-label": `${r.item}: ${fmt(v)} ${unidadNombre()}` });
+    const bg = sv("rect", { x: 0, y: y - rowH / 2, width: W, height: rowH, class: "hit" });
+    g.append(bg);
+    g.append(sv("text", { x: left - 10, y: y + 4, "text-anchor": "end", class: "strong" }, r.item));
+    if (tv > 0) g.append(sv("circle", { cx: f(tv), cy: y, r: 5, fill: "none", stroke: "var(--series-2)", "stroke-width": 2 }));
+    g.append(sv("circle", { cx: f(v), cy: y, r: 5.5, fill: "var(--series-1)", stroke: "var(--surface)", "stroke-width": 2 }));
+    g.append(sv("text", { x: W - right + 10, y: y + 4 }, fmt(v)));
+    const filas = () => [el("b", {}, `${fmt(v)} ${unidadNombre()}`), el("div", {}, `${r.item} · confianza ${r.confianza}`),
+      el("div", { class: "k" }, `Traderie: ${tv ? fmt(tv) : "–"} · ${r.n_ecuaciones} trueques`)];
+    g.addEventListener("pointermove", (e) => { bg.setAttribute("class", "hit row-hover"); mostrarTip(e, filas()); });
+    g.addEventListener("pointerleave", () => { bg.setAttribute("class", "hit"); ocultarTip(); });
+    g.addEventListener("focus", () => tipFocus(g, filas()));
+    g.addEventListener("blur", ocultarTip);
+    g.addEventListener("click", () => seleccionar(r.item));
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter") seleccionar(r.item); });
+    svg.append(g);
+  });
+  box.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ demanda
+function renderDemanda() {
+  const box = $("#chart-demanda");
+  const rows = enSeg(D.demanda).filter((r) => r.interes_total > 0).sort((a, b) => b.interes_total - a.interes_total).slice(0, 12);
+  if (!rows.length) { box.replaceChildren(el("div", { class: "empty" }, "Sin datos de demanda en este reino.")); return; }
+  const W = Math.max(box.clientWidth, 280), rowH = 28, barH = 16, left = Math.min(170, W * 0.42), right = 44, top = 4;
+  const H = top + rows.length * rowH + 4;
+  const max = Math.max(...rows.map((r) => r.interes_total));
+  const x = (v) => left + (v / max) * (W - left - right);
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Items más buscados" });
+  svg.append(sv("line", { x1: left, x2: left, y1: top, y2: H - 4, class: "axisline" }));
+  rows.forEach((r, i) => {
+    const y = top + i * rowH + (rowH - barH) / 2, w = Math.max(x(r.interes_total) - left, 2);
+    const g = sv("g", { tabindex: 0, role: "button", "aria-label": `${r.item}: ${r.interes_total}` });
+    const nombre = r.item.length > 24 ? r.item.slice(0, 23) + "…" : r.item;
+    g.append(sv("rect", { x: 0, y: y - 6, width: W, height: rowH, class: "hit" }));
+    g.append(sv("text", { x: left - 8, y: y + barH / 2 + 4, "text-anchor": "end" }, nombre));
+    g.append(sv("path", { d: `M${left},${y}h${Math.max(w - 4, 0)}a4,4 0 0 1 4,4v${barH - 8}a4,4 0 0 1 -4,4h${-Math.max(w - 4, 0)}z`, fill: "var(--series-1)" }));
+    g.append(sv("text", { x: left + w + 6, y: y + barH / 2 + 4, class: "strong" }, r.interes_total));
+    const filas = () => [el("b", {}, `${r.interes_total} veces`), el("div", {}, r.item),
+      el("div", { class: "k" }, `buscado ${r.buscado} · pedido como pago ${r.pedido_como_pago}`),
+      el("div", { class: "k" }, `en venta ${r.en_venta} · ofrecido como pago ${r.ofrecido_como_pago}`),
+      el("div", { class: "k" }, `demanda / oferta: ${r.demanda_vs_oferta ?? "–"}`)];
+    g.addEventListener("pointermove", (e) => mostrarTip(e, filas()));
+    g.addEventListener("pointerleave", ocultarTip);
+    g.addEventListener("focus", () => tipFocus(g, filas()));
+    g.addEventListener("blur", ocultarTip);
+    g.addEventListener("click", () => seleccionar(r.item));
+    svg.append(g);
+  });
+  box.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ tabla de valores
+function filasValores() {
+  const m = new Map();
+  for (const v of enSeg(D.valores_items)) m.set(v.item, { item: v.item, tipo: v.tipo, valor: num(v.valor), conf: v.confianza, n: v.n_ecuaciones, p25: num(v.implicito_p25), p75: num(v.implicito_p75), traderie: num(v.valor_traderie), es_runa: v.es_runa, orden: v.orden_runa });
+  for (const p of enSeg(D.precios_pedidos)) {
+    const f = m.get(p.item) || { item: p.item, tipo: p.tipo, valor: null, conf: null, n: 0, variable: p.precio_variable };
+    if (p.lado === "venta") { f.pide = num(p.mediana); f.nPide = p.n; }
+    else if (p.lado === "compra") { f.paga = num(p.mediana); f.nPaga = p.n; }
+    else if (p.lado === "vendido") { f.vendido = num(p.mediana); f.nVendido = p.n; }
+    m.set(p.item, f);
+  }
+  return [...m.values()];
+}
+function renderTipos(filas) {
+  const sel = $("#f-tipo"), tipos = [...new Set(filas.map((f) => f.tipo).filter(Boolean))].sort();
+  sel.replaceChildren(el("option", { value: "" }, "Todos los tipos"), ...tipos.map((t) => el("option", { value: t }, t)));
+  if (!tipos.includes(st.tipo)) st.tipo = ""; sel.value = st.tipo;
+}
+const COLS = [
+  { k: "item", t: "Item" }, { k: "tipo", t: "Tipo" },
+  { k: "valor", t: "Valor estimado", num: true, u: true }, { k: "pide", t: "Piden (mediana)", num: true, u: true },
+  { k: "paga", t: "Pagan (mediana)", num: true, u: true }, { k: "vendido", t: "Vendido (mediana)", num: true, u: true },
+  { k: "conf", t: "Confianza" }, { k: "n", t: "Datos", num: true },
+];
+const RANGO_CONF = { referencia: 4, alta: 3, media: 2, baja: 1 };
+function renderTabla(filas) {
+  const q = st.buscar.trim().toLowerCase();
+  let rows = filas.filter((f) => (!q || f.item.toLowerCase().includes(q)) && (!st.tipo || f.tipo === st.tipo));
+  const { col, dir } = st.orden;
+  rows.sort((a, b) => {
+    let x = a[col], y = b[col];
+    if (col === "conf") { x = RANGO_CONF[x] || 0; y = RANGO_CONF[y] || 0; }
+    if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+    return (typeof x === "string" ? x.localeCompare(y) : x - y) * dir;
+  });
+  const t = $("#t-valores");
+  const head = el("tr", {}, COLS.map((c) => el("th", { class: c.num ? "num" : null, scope: "col", tabindex: 0,
+    "aria-sort": c.k === col ? (dir > 0 ? "ascending" : "descending") : null,
+    onclick: () => ordenar(c.k), onkeydown: (e) => { if (e.key === "Enter") ordenar(c.k); } },
+    c.u ? `${c.t} (${unidadNombre()})` : c.t)));
+  const body = rows.map((f) => el("tr", { class: f.item === st.item ? "sel" : null, tabindex: 0,
+      onclick: () => seleccionar(f.item), onkeydown: (e) => { if (e.key === "Enter") seleccionar(f.item); } },
+    el("td", {}, f.item), el("td", {}, el("span", { class: "chip" }, f.tipo || "?")),
+    el("td", { class: "num" }, f.valor == null ? (f.variable ? "según stats" : "–") : fmt(conv(f.valor))),
+    el("td", { class: "num" }, f.pide == null ? "–" : `${fmt(conv(f.pide))}${f.nPide ? ` · ${f.nPide}` : ""}`),
+    el("td", { class: "num" }, f.paga == null ? "–" : `${fmt(conv(f.paga))}${f.nPaga ? ` · ${f.nPaga}` : ""}`),
+    el("td", { class: "num" }, f.vendido == null ? "–" : `${fmt(conv(f.vendido))} · ${f.nVendido}`),
+    el("td", {}, f.conf ? pill(f.conf) : "–"), el("td", { class: "num" }, f.n || (f.nPide || 0) + (f.nPaga || 0) + (f.nVendido || 0))));
+  t.replaceChildren(el("thead", {}, head), el("tbody", {}, body.length ? body : el("tr", {}, el("td", { colspan: COLS.length, class: "wrap" }, "Ningún item coincide con la búsqueda."))));
+}
+function ordenar(col) {
+  st.orden = st.orden.col === col ? { col, dir: -st.orden.dir } : { col, dir: col === "item" || col === "tipo" ? 1 : -1 };
+  renderTabla(filasValores());
+}
+function seleccionar(item) { st.item = item; renderTabla(filasValores()); renderDetalle(); $("#detalle").scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+
+// ------------------------------------------------------------------ detalle de un item
+function renderDetalle() {
+  const box = $("#detalle");
+  const item = st.item;
+  if (!item) { box.replaceChildren(el("div", { class: "empty" }, "Elegí un item de la tabla.")); return; }
+  const v = enSeg(D.valores_items).find((r) => r.item === item);
+  const pp = enSeg(D.precios_pedidos).filter((r) => r.item === item);
+  const ls = enSeg(D.listings).filter((r) => r.item_clave === item && num(r.precio_unitario) != null);
+  const freq = enSeg(D.pedidos_frecuentes).filter((r) => r.item === item).sort((a, b) => b.veces - a.veces).slice(0, 6);
+  const venta = pp.find((r) => r.lado === "venta"), compra = pp.find((r) => r.lado === "compra"), vendido = pp.find((r) => r.lado === "vendido");
+  const kv = (label, value) => el("div", {}, el("b", {}, value), el("span", {}, label));
+
+  const partes = [
+    el("div", { class: "detail-title" }, el("h3", { id: "h-detalle" }, item), v ? pill(v.confianza) : el("span", { class: "chip" }, "sin valor de modelo"), el("span", { class: "chip" }, (v && v.tipo) || (pp[0] && pp[0].tipo) || "?")),
+    el("div", { class: "kv" },
+      kv(`valor estimado (${unidadNombre()})`, v ? fmt(conv(v.valor)) : "–"),
+      kv("rango típico", v ? `${fmt(conv(v.implicito_p25))} – ${fmt(conv(v.implicito_p75))}` : "–"),
+      kv(`piden, mediana (${venta ? venta.n : 0})`, venta ? fmt(conv(venta.mediana)) : "–"),
+      kv(`pagan, mediana (${compra ? compra.n : 0})`, compra ? fmt(conv(compra.mediana)) : "–"),
+      kv(`vendido, mediana (${vendido ? vendido.n : 0})`, vendido ? fmt(conv(vendido.mediana)) : "–")),
+  ];
+
+  // distribución de precios: cada punto es un listing
+  if (ls.length) {
+    partes.push(el("div", { class: "panel-head" }, el("h2", {}, "Precio de cada listing"),
+      el("div", { class: "legend" }, el("span", {}, el("i", { style: "background:var(--series-1)" }), "venta (lo que piden)"),
+        el("span", {}, el("i", { style: "background:var(--series-2)" }), "compra (lo que pagan)"),
+        el("span", {}, el("i", { style: "background:var(--series-3)" }), "vendido (trade cerrado)"),
+        el("span", {}, el("i", { class: "line", style: "background:var(--ink)" }), "valor estimado"))));
+    const wrap = el("div", {}); partes.push(wrap);
+    requestAnimationFrame(() => dibujarPuntos(wrap, ls, v));
+  } else {
+    partes.push(el("div", { class: "empty" }, "Todavía no hay listings que vendan o busquen este item (solo aparece como pago en otros listings). Para traerlos, corré el script con --items pagos o --items \"" + item + "\"."));
+  }
+
+  if (freq.length) {
+    const max = Math.max(...freq.map((f) => f.veces));
+    partes.push(el("h2", {}, "Pedidos más comunes"));
+    partes.push(el("ul", { class: "asks" }, freq.map((f) => el("li", {},
+      el("div", { class: "txt" }, `${{ venta: "Venden", compra: "Buscan", vendido: "Vendieron", comprado: "Compraron" }[f.lado] || f.lado} ${f.ofrece} por ${f.pide}`, el("div", { class: "bar", style: `width:${Math.max(4, (f.veces / max) * 100)}%` })),
+      el("span", { class: "meta" }, `${f.veces}/${f.total} · ${Math.round(f.pct)}%`)))));
+  }
+
+  const recientes = ls.slice().sort((a, b) => String(b.actualizado).localeCompare(String(a.actualizado))).slice(0, 8);
+  if (recientes.length) {
+    partes.push(el("h2", {}, "Listings recientes"));
+    partes.push(el("div", { class: "table-wrap" }, el("table", {},
+      el("thead", {}, el("tr", {}, ["Lado", "Cant.", "Pedido", `Precio c/u (${unidadNombre()})`, "Desvío", ""].map((t) => el("th", {}, t)))),
+      el("tbody", {}, recientes.map((r) => el("tr", {},
+        el("td", {}, r.lado), el("td", { class: "num" }, cantTxt(r)), el("td", { class: "wrap" }, r.pedido_que_fija_precio || r.pedido_principal),
+        el("td", { class: "num" }, fmt(conv(r.precio_unitario))), el("td", { class: "num" }, desvio(r)),
+        el("td", {}, r.url ? el("a", { href: r.url, target: "_blank", rel: "noopener" }, "ver") : "")))))));
+  }
+  box.replaceChildren(...partes);
+}
+// "4 c/u": hay 4 en stock y el pedido es por cada una; "12": el pedido es por las 12 juntas
+const cantTxt = (r) => (r.precio_por_unidad && r.cant > 1 ? `${r.cant} c/u` : String(r.cant));
+function desvio(r) {
+  const d = num(r.desvio_pct); if (d == null) return "–";
+  const bueno = r.lado === "venta" || r.lado === "vendido" ? d < 0 : d > 0;
+  return el("span", { class: Math.abs(d) < 10 ? null : bueno ? "delta-neg" : "delta-pos" }, `${d > 0 ? "+" : ""}${Math.round(d)}%`);
+}
+function dibujarPuntos(box, ls, v) {
+  const W = Math.max(box.clientWidth, 260), left = 72, right = 16, top = 10, bottom = 28;
+  const H = top + bottom + 46 * ["venta", "vendido", "compra", "comprado"].filter((l) => ls.some((r) => r.lado === l)).length;
+  const lados = ["venta", "vendido", "compra", "comprado"].filter((l) => ls.some((r) => r.lado === l));
+  const band = (H - top - bottom) / lados.length;
+  const vals = ls.map((r) => conv(r.precio_unitario)).concat(v ? [conv(v.valor)] : []).filter((x) => x > 0);
+  if (!vals.length) { box.replaceChildren(el("div", { class: "empty" }, "Sin precios positivos para graficar.")); return; }
+  const { f, ticks } = escalaLog(Math.min(...vals), Math.max(...vals), left, W - right);
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Precios de ${st.item}` });
+  for (const t of ticks) {
+    svg.append(sv("line", { x1: f(t), x2: f(t), y1: top, y2: H - bottom, class: "gridline" }));
+    svg.append(sv("text", { x: f(t), y: H - bottom + 17, "text-anchor": "middle", class: "muted" }, tickTxt(t)));
+  }
+  lados.forEach((l, i) => svg.append(sv("text", { x: left - 10, y: top + band * i + band / 2 + 4, "text-anchor": "end" }, l)));
+  if (v) {
+    const xv = f(conv(v.valor));
+    svg.append(sv("line", { x1: xv, x2: xv, y1: top - 4, y2: H - bottom, stroke: "var(--ink)", "stroke-width": 2 }));
+  }
+  ls.forEach((r, k) => {
+    const i = lados.indexOf(r.lado), p = conv(r.precio_unitario);
+    if (!(p > 0)) return;
+    const jit = ((k * 37) % 11) / 10 - 0.5; // dispersión determinística para que no se tapen
+    const cx = f(p), cy = top + band * i + band / 2 + jit * band * 0.5;
+    const g = sv("g", { tabindex: 0 });
+    g.append(sv("circle", { cx, cy, r: 12, class: "hit" }));
+    g.append(sv("circle", { cx, cy, r: 4.5, fill: COLOR_LADO[r.lado], stroke: "var(--surface)", "stroke-width": 2 }));
+    const filas = () => [el("b", {}, `${fmt(p)} ${unidadNombre()} c/u`), el("div", {}, `${VERBO_LADO[r.lado]} ${r.cant} ${r.item_clave}${r.precio_por_unidad ? " (precio por unidad)" : " (precio por el lote)"}`),
+      el("div", {}, `por ${r.pedido_que_fija_precio || r.pedido_principal}`), el("div", { class: "k" }, `${r.vendedor ? r.vendedor + " · " : ""}${fecha(r.actualizado)}`)];
+    g.addEventListener("pointermove", (e) => mostrarTip(e, filas()));
+    g.addEventListener("pointerleave", ocultarTip);
+    g.addEventListener("focus", () => tipFocus(g, filas()));
+    g.addEventListener("blur", ocultarTip);
+    if (r.url) g.addEventListener("click", () => window.open(r.url, "_blank", "noopener"));
+    svg.append(g);
+  });
+  box.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ oportunidades
+function renderOportunidades() {
+  const rows = enSeg(D.oportunidades).slice(0, 60);
+  const t = $("#t-op");
+  if (!rows.length) { t.replaceChildren(el("tbody", {}, el("tr", {}, el("td", { class: "wrap" }, "No hay oportunidades en este reino con los datos actuales.")))); return; }
+  t.replaceChildren(
+    el("thead", {}, el("tr", {}, ["Qué hacer", "Item", "Cant.", "Pedido", `Precio c/u (${unidadNombre()})`, `Valor (${unidadNombre()})`, "Desvío", "Confianza", "Usuario", "Visto", ""].map((x) => el("th", {}, x)))),
+    el("tbody", {}, rows.map((r) => el("tr", { onclick: () => seleccionar(r.item_clave) },
+      el("td", {}, el("span", { class: "chip" }, r.tipo_oportunidad)), el("td", {}, r.item_clave), el("td", { class: "num" }, cantTxt(r)),
+      el("td", { class: "wrap" }, r.pedido_que_fija_precio || r.pedido_principal),
+      el("td", { class: "num" }, fmt(conv(r.precio_unitario))), el("td", { class: "num" }, fmt(conv(r.valor_item))),
+      el("td", { class: "num" }, desvio(r)), el("td", {}, pill(r.confianza)), el("td", {}, r.vendedor || "–"),
+      el("td", {}, fecha(r.actualizado)),
+      el("td", {}, r.url ? el("a", { href: r.url, target: "_blank", rel: "noopener", onclick: (e) => e.stopPropagation() }, "ver") : "")))));
+}
+
+// ------------------------------------------------------------------ historial
+function renderHistorial() {
+  const box = $("#chart-hist"), leg = $("#leg-hist");
+  const h = enSeg(D.historial_valores);
+  const fechas = [...new Set(h.map((r) => r.fecha))].sort();
+  const items = HIST_ITEMS.filter((i) => h.some((r) => r.item === i));
+  if (st.item && !items.includes(st.item) && h.some((r) => r.item === st.item)) items.push(st.item);
+  leg.replaceChildren(...items.map((it, k) => el("span", {}, el("i", { class: "line", style: `background:var(--series-${k + 1})` }), it)));
+  if (fechas.length < 2 || !items.length) {
+    box.replaceChildren(el("div", { class: "empty" }, `Hay ${fechas.length} corrida${fechas.length === 1 ? "" : "s"} registrada${fechas.length === 1 ? "" : "s"}. La evolución aparece desde la segunda (por ejemplo con --repetir).`));
+    return;
+  }
+  const W = Math.max(box.clientWidth, 300), H = 240, left = 48, right = 56, top = 12, bottom = 30;
+  const serie = (it) => fechas.map((fe) => { const r = h.find((x) => x.fecha === fe && x.item === it); return r ? conv(r.valor) : null; });
+  const series = items.map((it) => ({ it, ys: serie(it) }));
+  const all = series.flatMap((s) => s.ys).filter((x) => x > 0);
+  const { f: fy, ticks } = escalaLog(Math.min(...all), Math.max(...all), H - bottom, top);
+  const t0 = +new Date(fechas[0]), t1 = +new Date(fechas[fechas.length - 1]);
+  const fx = (fe) => left + ((+new Date(fe) - t0) / Math.max(t1 - t0, 1)) * (W - left - right);
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Evolución de valores" });
+  for (const t of ticks) {
+    svg.append(sv("line", { x1: left, x2: W - right, y1: fy(t), y2: fy(t), class: "gridline" }));
+    svg.append(sv("text", { x: left - 8, y: fy(t) + 4, "text-anchor": "end", class: "muted" }, tickTxt(t)));
+  }
+  [fechas[0], fechas[fechas.length - 1]].forEach((fe, i) => svg.append(sv("text", { x: fx(fe), y: H - 8, "text-anchor": i ? "end" : "start", class: "muted" }, fecha(fe))));
+  series.forEach((s, k) => {
+    let d = "";
+    s.ys.forEach((y, i) => { if (y > 0) d += `${d && s.ys[i - 1] > 0 ? "L" : "M"}${fx(fechas[i])},${fy(y)}`; });
+    svg.append(sv("path", { d, fill: "none", stroke: `var(--series-${k + 1})`, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    const li = s.ys.map((y, i) => [y, i]).filter(([y]) => y > 0).pop();
+    if (li) {
+      svg.append(sv("circle", { cx: fx(fechas[li[1]]), cy: fy(li[0]), r: 4.5, fill: `var(--series-${k + 1})`, stroke: "var(--surface)", "stroke-width": 2 }));
+      svg.append(sv("text", { x: fx(fechas[li[1]]) + 9, y: fy(li[0]) + 4 }, `${s.it} ${fmt(li[0])}`));
+    }
+  });
+  const cross = sv("line", { y1: top, y2: H - bottom, class: "axisline", visibility: "hidden" });
+  const capa = sv("rect", { x: left, y: top, width: W - left - right, height: H - top - bottom, fill: "transparent" });
+  svg.append(cross, capa);
+  capa.addEventListener("pointermove", (e) => {
+    const r = svg.getBoundingClientRect(), px = ((e.clientX - r.left) / r.width) * W;
+    let best = 0; fechas.forEach((fe, i) => { if (Math.abs(fx(fe) - px) < Math.abs(fx(fechas[best]) - px)) best = i; });
+    cross.setAttribute("x1", fx(fechas[best])); cross.setAttribute("x2", fx(fechas[best])); cross.setAttribute("visibility", "visible");
+    mostrarTip(e, [el("div", { class: "k" }, fecha(fechas[best])), ...series.map((s, k) => el("div", {},
+      el("span", { style: `display:inline-block;width:12px;height:2px;margin-right:6px;vertical-align:3px;background:var(--series-${k + 1})` }),
+      el("b", { style: "display:inline;font-size:13px" }, fmt(s.ys[best])), ` ${s.it}`))]);
+  });
+  capa.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); ocultarTip(); });
+  box.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ eventos
+$("#f-seg").addEventListener("change", (e) => { st.seg = e.target.value; st.item = null; guardarPrefs(); render(); });
+$("#f-unidad").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; st.unidad = b.dataset.u; guardarPrefs(); render(); });
+$("#f-buscar").addEventListener("input", (e) => { st.buscar = e.target.value; renderTabla(filasValores()); });
+$("#f-tipo").addEventListener("change", (e) => { st.tipo = e.target.value; renderTabla(filasValores()); });
+$("#btn-cargar").addEventListener("click", () => $("#f-archivo").click());
+function leerArchivo(file) {
+  if (!file) return;
+  file.text().then((t) => cargar(JSON.parse(t))).catch(() => {
+    $("#meta").textContent = "Ese archivo no es un dashboard.json válido. Usá el que genera el script en salida/.";
+  });
+}
+$("#f-archivo").addEventListener("change", (e) => leerArchivo(e.target.files[0]));
+const drop = $("#drop");
+addEventListener("dragover", (e) => { e.preventDefault(); drop.style.display = "grid"; });
+addEventListener("dragleave", (e) => { if (!e.relatedTarget) drop.style.display = "none"; });
+addEventListener("drop", (e) => { e.preventDefault(); drop.style.display = "none"; leerArchivo(e.dataTransfer.files[0]); });
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => D && (renderRunas(), renderDemanda(), renderDetalle(), renderHistorial()), 150); });
+
+// Datos: incrustados (dashboard.html local, artifact) o, en la página publicada, desde
+// datos.json, que se vuelve a pedir cada 5 minutos sin perder el reino ni el item elegidos.
+let inicial = null, remoto = false;
+try { inicial = JSON.parse($("#datos").textContent); } catch (e) {}
+async function cargarRemoto(primera) {
+  try {
+    const r = await fetch(`datos.json?t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const datos = await r.json();
+    remoto = true;
+    if (!D || datos.generado !== D.generado) cargar(datos, !primera);
+  } catch (e) { if (primera) render(); }
+}
+if (inicial) cargar(inicial);
+else { cargarRemoto(true); setInterval(() => cargarRemoto(false), 5 * 60 * 1000); }
+})();
+</script>
